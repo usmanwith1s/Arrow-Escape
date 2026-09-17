@@ -985,11 +985,15 @@ function createArrowCell(
         from the previous version.
     */
 
-    const outer =
-        svgElement(
-            "g",
-            {
-                class: "arrow-cell",
+   const outer =
+    svgElement(
+        "g",
+        {
+            class: "arrow-cell",
+            "data-key": key,
+            "data-row": r,
+            "data-col": c,
+            "aria-label": `${dir} arrow`,
 
                 "data-key": key,
 
@@ -2610,25 +2614,87 @@ newPuzzleButton.addEventListener(
    BOARD EVENTS
 ========================================================= */
 
+/*
+    NORMAL DIFFICULTIES
+    -------------------
+    Use a simple click event.
+
+    This avoids the pointer-gesture system interfering with
+    ordinary taps/clicks.
+*/
+
+boardSvg.addEventListener("click", event => {
+
+    if (zoomPan) {
+        return;
+    }
+
+    const arrow =
+        event.target.closest("[data-key]");
+
+    if (!arrow) {
+        return;
+    }
+
+    const r =
+        Number(arrow.dataset.row);
+
+    const c =
+        Number(arrow.dataset.col);
+
+    handleTap(r, c);
+});
+
+
+/*
+    ZOOM/PAN DIFFICULTIES
+    ---------------------
+    Keep the pointer system only where it is actually needed.
+*/
+
 boardSvg.addEventListener(
     "pointerdown",
-    handlePointerDown
+    event => {
+
+        if (zoomPan) {
+            handlePointerDown(event);
+        }
+    }
 );
+
 
 boardSvg.addEventListener(
     "pointermove",
-    handlePointerMove
+    event => {
+
+        if (zoomPan) {
+            handlePointerMove(event);
+        }
+    }
 );
+
 
 boardSvg.addEventListener(
     "pointerup",
-    handlePointerUp
+    event => {
+
+        if (zoomPan) {
+            handlePointerUp(event);
+        }
+    }
 );
+
 
 boardSvg.addEventListener(
     "pointercancel",
-    handlePointerCancel
+    event => {
+
+        if (zoomPan) {
+            handlePointerCancel(event);
+        }
+    }
 );
+
 
 boardSvg.addEventListener(
     "wheel",
@@ -2641,8 +2707,9 @@ boardSvg.addEventListener(
 
 boardSvg.addEventListener(
     "contextmenu",
-    event =>
-        event.preventDefault()
+    event => {
+        event.preventDefault();
+    }
 );
 
 
