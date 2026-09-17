@@ -1,432 +1,954 @@
+/* =========================================================
+   ARROW ESCAPE
+   Main Game Styling
+========================================================= */
+
+:root {
+    --bg: #f5f5f2;
+    --surface: #ffffff;
+    --surface-soft: #eeeeea;
+
+    --ink: #111111;
+    --muted: #777777;
+    --muted-strong: #555555;
+
+    --border: rgba(17, 17, 17, 0.10);
+    --border-strong: rgba(17, 17, 17, 0.18);
+
+    --danger: #d94747;
+    --danger-soft: rgba(217, 71, 71, 0.12);
+
+    --shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+
+    --button-hover: #ecece8;
+    --progress-bg: #e3e3df;
+
+    --board-bg: #ffffff;
+    --grid: rgba(17, 17, 17, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #090909;
+        --surface: #111111;
+        --surface-soft: #191919;
+
+        --ink: #f4f4f1;
+        --muted: #8f8f8a;
+        --muted-strong: #b7b7b1;
+
+        --border: rgba(255, 255, 255, 0.09);
+        --border-strong: rgba(255, 255, 255, 0.17);
+
+        --danger: #ff6868;
+        --danger-soft: rgba(255, 104, 104, 0.12);
+
+        --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+
+        --button-hover: #1d1d1d;
+        --progress-bg: #232323;
+
+        --board-bg: #101010;
+        --grid: rgba(255, 255, 255, 0.11);
+    }
+}
+
+
+/* =========================================================
+   RESET
+========================================================= */
+
 * {
     box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+}
+
+html {
+    min-width: 320px;
+    background: var(--bg);
 }
 
 body {
+    margin: 0;
     min-height: 100vh;
-    background: #050807;
-    color: #ffffff;
-    font-family: Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-}
-
-.game-container {
-    width: 100%;
-    max-width: 850px;
-}
-
-/* HEADER */
-
-.game-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 25px;
-}
-
-.game-label {
-    color: #39ff88;
-    font-size: 12px;
-    font-weight: bold;
-    letter-spacing: 2px;
-    margin-bottom: 5px;
-}
-
-.game-header h1 {
-    font-size: 36px;
-    letter-spacing: -1px;
-}
-
-.stats {
-    display: flex;
-    gap: 15px;
-}
-
-.stat {
-    background: #0b1210;
-    border: 1px solid #18251f;
-    border-radius: 12px;
-    padding: 10px 16px;
-    min-width: 85px;
-    text-align: center;
-}
-
-.stat span {
-    display: block;
-    color: #7d8a84;
-    font-size: 10px;
-    letter-spacing: 1.5px;
-    margin-bottom: 4px;
-}
-
-.stat strong {
-    color: #39ff88;
-    font-size: 17px;
-}
-
-/* GAME AREA */
-
-.game-area {
-    display: flex;
-    justify-content: center;
-}
-
-.board {
-    width: min(80vw, 650px);
-    height: min(80vw, 650px);
 
     background:
-        linear-gradient(rgba(57, 255, 136, 0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(57, 255, 136, 0.025) 1px, transparent 1px),
-        #080e0c;
+        radial-gradient(
+            circle at 50% -10%,
+            rgba(0, 0, 0, 0.04),
+            transparent 40%
+        ),
+        var(--bg);
 
-    border: 1px solid #1b3026;
-    border-radius: 18px;
+    color: var(--ink);
 
-    box-shadow:
-        0 0 40px rgba(57, 255, 136, 0.04),
-        inset 0 0 40px rgba(0, 0, 0, 0.5);
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+}
+
+button {
+    font: inherit;
+}
+
+
+/* =========================================================
+   MAIN APP
+========================================================= */
+
+.game-app {
+    min-height: 100vh;
+
+    display: flex;
+    flex-direction: column;
+}
+
+
+/* =========================================================
+   TOP BAR
+========================================================= */
+
+.topbar {
+    width: 100%;
+
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+
+    padding: 16px 22px;
+
+    border-bottom: 1px solid var(--border);
+
+    background: rgba(255, 255, 255, 0.55);
+
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
 
     position: relative;
-    overflow: hidden;
+    z-index: 20;
 }
 
-/* MESSAGE */
+@media (prefers-color-scheme: dark) {
+    .topbar {
+        background: rgba(10, 10, 10, 0.72);
+    }
+}
 
-.game-message {
+.topbar-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    min-width: 0;
+}
+
+.topbar-right {
+    justify-content: flex-end;
+}
+
+.topbar-center {
     text-align: center;
-    color: #87958e;
-    margin-top: 18px;
-    font-size: 14px;
+    min-width: 120px;
 }
 
-/* BUTTON */
+.brand-small {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+}
 
-.restart-button {
-    display: block;
-    margin: 20px auto 0;
+.difficulty-name {
+    margin-top: 2px;
 
-    padding: 12px 22px;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
 
-    background: #0d1713;
-    color: #39ff88;
+.level-label {
+    margin-top: 1px;
 
-    border: 1px solid #214331;
-    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+}
 
-    font-size: 14px;
-    font-weight: bold;
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.top-button,
+.action-button,
+.primary-button,
+.secondary-button,
+.floating-button {
+    border: 0;
 
     cursor: pointer;
 
-    transition:
-        background 0.2s ease,
-        transform 0.2s ease,
-        border-color 0.2s ease;
-}
-
-.restart-button:hover {
-    background: #12231b;
-    border-color: #39ff88;
-    transform: translateY(-2px);
-}
-
-.restart-button:active {
-    transform: translateY(0);
-}
-
-/* MOBILE */
-
-@media (max-width: 600px) {
-
-    body {
-        padding: 12px;
-    }
-
-    .game-header {
-        align-items: flex-start;
-    }
-
-    .game-header h1 {
-        font-size: 28px;
-    }
-
-    .stats {
-        gap: 6px;
-    }
-
-    .stat {
-        min-width: 65px;
-        padding: 8px 9px;
-    }
-
-    .stat strong {
-        font-size: 14px;
-    }
-
-    .game-label {
-        font-size: 9px;
-    }
-
-    .board {
-        width: 94vw;
-        height: 94vw;
-        border-radius: 14px;
-    }
-}
-/* =========================
-   ARROWS
-========================= */
-
-.arrow {
-    position: absolute;
-
-    width: 13%;
-    height: 7%;
-
-    padding: 0;
-    margin: 0;
-
-    border: none;
+    color: var(--ink);
     background: transparent;
 
-    cursor: pointer;
+    transition:
+        background 160ms ease,
+        transform 160ms ease,
+        opacity 160ms ease;
+}
 
-    transform: translate(-50%, -50%);
+.top-button:hover,
+.action-button:hover,
+.secondary-button:hover,
+.floating-button:hover {
+    background: var(--button-hover);
+}
+
+.top-button:active,
+.action-button:active,
+.primary-button:active,
+.secondary-button:active,
+.floating-button:active {
+    transform: scale(0.96);
+}
+
+.top-button:focus-visible,
+.action-button:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.floating-button:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 3px;
+}
+
+.top-button {
+    min-height: 40px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+
+    padding: 0 12px;
+
+    border-radius: 10px;
+
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.action-button {
+    min-height: 42px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+
+    padding: 0 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 11px;
+
+    background: var(--surface);
+
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.03);
+
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.action-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+
+.primary-button,
+.secondary-button {
+    min-height: 46px;
+
+    padding: 0 18px;
+
+    border-radius: 12px;
+
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.primary-button {
+    background: var(--ink);
+    color: var(--bg);
+}
+
+.primary-button:hover {
+    opacity: 0.88;
+}
+
+.secondary-button {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+}
+
+
+/* =========================================================
+   HEARTS
+========================================================= */
+
+.hearts {
+    min-height: 40px;
 
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    gap: 3px;
 
-    z-index: 5;
+    padding: 0 4px;
+}
+
+.heart {
+    width: 26px;
+    height: 26px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    color: var(--ink);
+
+    font-size: 21px;
+    line-height: 1;
 
     transition:
-        left 0.35s ease,
-        top 0.35s ease,
-        filter 0.15s ease;
+        opacity 180ms ease,
+        transform 180ms ease,
+        color 180ms ease;
 }
 
-
-/* =========================
-   ARROW SHAFT
-========================= */
-
-.arrow-shaft {
-    position: absolute;
-
-    left: 0;
-    top: 50%;
-
-    width: 76%;
-    height: 28%;
-
-    transform: translateY(-50%);
-
-    background: #39ff88;
-
-    border-radius: 999px;
-
-    box-shadow:
-        0 0 8px rgba(57, 255, 136, 0.25);
+.heart.empty {
+    color: var(--muted);
+    opacity: 0.27;
 }
 
-
-/* =========================
-   ARROW HEAD
-========================= */
-
-.arrow-head {
-    position: absolute;
-
-    right: 0;
-    top: 50%;
-
-    transform: translateY(-50%);
-
-    width: 0;
-    height: 0;
-
-    border-top: 13px solid transparent;
-    border-bottom: 13px solid transparent;
-    border-left: 23px solid #39ff88;
-
-    filter:
-        drop-shadow(0 0 7px rgba(57, 255, 136, 0.3));
+.heart.breaking {
+    animation: heartBreak 420ms ease both;
 }
 
-
-/* =========================
-   DIRECTIONS
-========================= */
-
-.arrow[data-direction="right"] {
-    transform: translate(-50%, -50%) rotate(0deg);
-}
-
-.arrow[data-direction="down"] {
-    transform: translate(-50%, -50%) rotate(90deg);
-}
-
-.arrow[data-direction="left"] {
-    transform: translate(-50%, -50%) rotate(180deg);
-}
-
-.arrow[data-direction="up"] {
-    transform: translate(-50%, -50%) rotate(-90deg);
-}
-
-
-/* =========================
-   HOVER
-========================= */
-
-.arrow:hover {
-    filter: brightness(1.25);
-
-    transform:
-        translate(-50%, -50%)
-        scale(1.06)
-        rotate(0deg);
-}
-
-
-/* Keep direction on hover */
-
-.arrow[data-direction="right"]:hover {
-    transform:
-        translate(-50%, -50%)
-        scale(1.06)
-        rotate(0deg);
-}
-
-.arrow[data-direction="down"]:hover {
-    transform:
-        translate(-50%, -50%)
-        scale(1.06)
-        rotate(90deg);
-}
-
-.arrow[data-direction="left"]:hover {
-    transform:
-        translate(-50%, -50%)
-        scale(1.06)
-        rotate(180deg);
-}
-
-.arrow[data-direction="up"]:hover {
-    transform:
-        translate(-50%, -50%)
-        scale(1.06)
-        rotate(-90deg);
-}
-
-
-/* =========================
-   CLASH
-========================= */
-
-.arrow.blocked .arrow-shaft {
-    background: #ff4444;
-
-    box-shadow:
-        0 0 14px rgba(255, 68, 68, 0.8);
-}
-
-.arrow.blocked .arrow-head {
-    border-left-color: #ff4444;
-
-    filter:
-        drop-shadow(0 0 10px rgba(255, 68, 68, 0.8));
-}
-
-.arrow.blocked {
-    animation: clashShake 0.4s ease;
-}
-
-
-/* =========================
-   ESCAPE
-========================= */
-
-.arrow.escaping {
-    pointer-events: none;
-
-    animation: arrowEscape 0.55s ease-in forwards;
-}
-
-
-/* =========================
-   ANIMATIONS
-========================= */
-
-@keyframes clashShake {
-
+@keyframes heartBreak {
     0% {
-        transform: translate(-50%, -50%) rotate(var(--rotation));
+        transform: scale(1);
+        opacity: 1;
     }
 
     20% {
-        transform:
-            translate(calc(-50% - 7px), -50%)
-            rotate(var(--rotation));
+        transform: scale(1.32) rotate(-6deg);
     }
 
-    40% {
-        transform:
-            translate(calc(-50% + 7px), -50%)
-            rotate(var(--rotation));
+    45% {
+        transform: scale(0.78) rotate(7deg);
     }
 
-    60% {
-        transform:
-            translate(calc(-50% - 4px), -50%)
-            rotate(var(--rotation));
-    }
-
-    80% {
-        transform:
-            translate(calc(-50% + 3px), -50%)
-            rotate(var(--rotation));
+    72% {
+        transform: scale(1.06) rotate(-3deg);
     }
 
     100% {
-        transform:
-            translate(-50%, -50%)
-            rotate(var(--rotation));
+        transform: scale(0.85);
+        opacity: 0.24;
     }
 }
 
 
-@keyframes arrowEscape {
+/* =========================================================
+   GAME SECTION
+========================================================= */
 
+.game-section {
+    flex: 1;
+
+    width: min(100%, 900px);
+
+    margin: 0 auto;
+
+    padding: 18px 18px 28px;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.game-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+
+    align-items: center;
+
+    gap: 14px;
+
+    margin-bottom: 14px;
+}
+
+.toolbar-left {
+    display: flex;
+    gap: 8px;
+}
+
+.status-area {
+    min-width: 0;
+
+    text-align: center;
+
+    color: var(--muted-strong);
+
+    font-size: 12px;
+    font-weight: 650;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.progress-area {
+    min-width: 115px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    align-items: flex-end;
+
+    color: var(--muted);
+
+    font-size: 10px;
+    font-weight: 700;
+
+    letter-spacing: 0.03em;
+}
+
+.progress-track {
+    width: 115px;
+    height: 5px;
+
+    overflow: hidden;
+
+    border-radius: 999px;
+
+    background: var(--progress-bg);
+}
+
+.progress-fill {
+    width: 0;
+    height: 100%;
+
+    border-radius: inherit;
+
+    background: var(--ink);
+
+    transition: width 220ms ease;
+}
+
+
+/* =========================================================
+   BOARD
+========================================================= */
+
+.board-wrap {
+    position: relative;
+
+    width: min(94vw, 720px);
+    height: min(72vh, 720px);
+    min-height: 300px;
+
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.board-svg {
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    overflow: hidden;
+
+    border: 1px solid var(--border-strong);
+    border-radius: 22px;
+
+    background: var(--board-bg);
+
+    box-shadow: var(--shadow);
+
+    user-select: none;
+    -webkit-user-select: none;
+
+    touch-action: manipulation;
+}
+
+.board-wrap.zoomable .board-svg {
+    touch-action: none;
+    cursor: grab;
+}
+
+.board-wrap.zoomable .board-svg:active {
+    cursor: grabbing;
+}
+
+
+/* =========================================================
+   SVG ARROWS
+========================================================= */
+
+.arrow-cell {
+    cursor: pointer;
+}
+
+.arrow-hit {
+    fill: transparent;
+
+    pointer-events: all;
+}
+
+.arrow-visual {
+    color: var(--ink);
+
+    pointer-events: none;
+
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.arrow-shaft {
+    stroke: currentColor;
+    stroke-width: var(--arrow-stroke, 5);
+    stroke-linecap: round;
+}
+
+.arrow-head {
+    fill: currentColor;
+}
+
+.arrow-visual.blocked {
+    color: var(--danger);
+
+    animation: arrowFlash 200ms ease;
+}
+
+.arrow-visual.hint {
+    animation: hintPulse 720ms ease-in-out 2;
+}
+
+@keyframes arrowFlash {
     0% {
         opacity: 1;
     }
 
+    28% {
+        opacity: 0.42;
+    }
+
+    58% {
+        opacity: 1;
+    }
+
     100% {
-        opacity: 0;
+        opacity: 1;
+    }
+}
+
+@keyframes hintPulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.32;
+    }
+
+    100% {
+        opacity: 1;
     }
 }
 
 
-/* =========================
-   MOBILE
-========================= */
+/* =========================================================
+   GRID
+========================================================= */
 
-@media (max-width: 600px) {
+.grid-line {
+    stroke: var(--grid);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
 
-    .arrow {
-        width: 14%;
-        height: 8%;
+#gridGroup {
+    opacity: 0;
+    transition: opacity 160ms ease;
+}
+
+#gridGroup.visible {
+    opacity: 1;
+}
+
+
+/* =========================================================
+   ZOOM TIP
+========================================================= */
+
+.zoom-tip {
+    position: absolute;
+
+    left: 50%;
+    bottom: 12px;
+
+    transform: translateX(-50%);
+
+    padding: 6px 10px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.78);
+
+    color: var(--muted);
+
+    font-size: 10px;
+    font-weight: 650;
+
+    pointer-events: none;
+
+    opacity: 0;
+
+    transition: opacity 180ms ease;
+}
+
+@media (prefers-color-scheme: dark) {
+    .zoom-tip {
+        background: rgba(17, 17, 17, 0.82);
+    }
+}
+
+.zoomable + .zoom-tip {
+    opacity: 1;
+}
+
+
+/* =========================================================
+   FLOATING GRID BUTTON
+========================================================= */
+
+.floating-button {
+    position: fixed;
+
+    right: 20px;
+    bottom: 20px;
+
+    z-index: 30;
+
+    width: 46px;
+    height: 46px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+
+    background: var(--surface);
+
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+
+    font-size: 20px;
+}
+
+.floating-button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--bg);
+}
+
+
+/* =========================================================
+   OVERLAYS
+========================================================= */
+
+.overlay {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 100;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    background: rgba(0, 0, 0, 0.38);
+
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.overlay[hidden] {
+    display: none;
+}
+
+.overlay-card {
+    width: min(100%, 390px);
+
+    padding: 30px 26px 26px;
+
+    border: 1px solid var(--border-strong);
+    border-radius: 22px;
+
+    background: var(--surface);
+
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.24);
+
+    text-align: center;
+
+    animation: overlayIn 240ms ease both;
+}
+
+@keyframes overlayIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
     }
 
-    .arrow-head {
-        border-top-width: 10px;
-        border-bottom-width: 10px;
-        border-left-width: 18px;
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.overlay-kicker {
+    color: var(--muted);
+
+    font-size: 10px;
+    font-weight: 850;
+
+    letter-spacing: 0.22em;
+}
+
+.overlay-card h2 {
+    margin: 8px 0 8px;
+
+    font-size: clamp(28px, 7vw, 42px);
+    line-height: 1;
+
+    letter-spacing: -0.04em;
+}
+
+.overlay-card p {
+    margin: 0 auto;
+
+    max-width: 300px;
+
+    color: var(--muted-strong);
+
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.star-rating {
+    margin: 16px 0 12px;
+
+    font-size: 31px;
+    letter-spacing: 5px;
+
+    color: var(--ink);
+}
+
+.overlay-actions {
+    display: flex;
+    flex-wrap: wrap;
+
+    justify-content: center;
+
+    gap: 9px;
+
+    margin-top: 22px;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 760px) {
+
+    .topbar {
+        grid-template-columns: 1fr auto 1fr;
+
+        padding: 12px 11px;
+    }
+
+    .top-button {
+        padding: 0 9px;
+
+        font-size: 11px;
+    }
+
+    .topbar-left {
+        gap: 4px;
+    }
+
+    .brand-small {
+        font-size: 8px;
+    }
+
+    .difficulty-name {
+        font-size: 15px;
+    }
+
+    .level-label {
+        font-size: 10px;
+    }
+
+    .heart {
+        width: 22px;
+        height: 22px;
+
+        font-size: 18px;
+    }
+
+    .game-section {
+        padding: 12px 10px 20px;
+    }
+
+    .game-toolbar {
+        grid-template-columns: auto minmax(0, 1fr);
+
+        gap: 8px;
+    }
+
+    .status-area {
+        grid-column: 1 / -1;
+        grid-row: 2;
+
+        text-align: left;
+
+        padding: 0 3px;
+    }
+
+    .progress-area {
+        grid-column: 2;
+        grid-row: 1;
+
+        align-items: flex-end;
+    }
+
+    .progress-track {
+        width: 92px;
+    }
+
+    .action-button {
+        min-height: 40px;
+        padding: 0 11px;
+
+        font-size: 12px;
+    }
+
+    .board-wrap {
+        width: 96vw;
+        height: min(68vh, 620px);
+
+        min-height: 280px;
+    }
+
+    .board-svg {
+        border-radius: 16px;
+    }
+
+    .floating-button {
+        right: 14px;
+        bottom: 14px;
+
+        width: 43px;
+        height: 43px;
+    }
+}
+
+
+@media (max-width: 430px) {
+
+    .topbar-left {
+        overflow-x: auto;
+
+        scrollbar-width: none;
+    }
+
+    .topbar-left::-webkit-scrollbar {
+        display: none;
+    }
+
+    .top-button {
+        white-space: nowrap;
+    }
+
+    .hearts {
+        gap: 0;
+    }
+
+    .game-toolbar {
+        gap: 7px;
+    }
+
+    .toolbar-left {
+        gap: 5px;
+    }
+
+    .action-button {
+        padding: 0 9px;
+    }
+
+    .status-area {
+        font-size: 11px;
+    }
+
+    .progress-area {
+        min-width: 90px;
+    }
+
+    .progress-track {
+        width: 82px;
+    }
+
+    .overlay-card {
+        padding: 26px 20px 22px;
+        border-radius: 18px;
+    }
+
+    .overlay-actions {
+        flex-direction: column;
+    }
+
+    .primary-button,
+    .secondary-button {
+        width: 100%;
+    }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
     }
 }
