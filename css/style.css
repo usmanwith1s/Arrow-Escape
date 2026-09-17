@@ -186,112 +186,224 @@ body {
 .arrow {
     position: absolute;
 
-    width: 54px;
-    height: 54px;
+    width: 18%;
+    height: 18%;
 
     transform: translate(-50%, -50%);
 
-    border: 1px solid rgba(57, 255, 136, 0.35);
-    border-radius: 12px;
+    border: none;
+    background: transparent;
 
-    background: #101a15;
-    color: #39ff88;
+    padding: 0;
+    margin: 0;
 
-    font-size: 34px;
-    font-weight: bold;
+    cursor: pointer;
 
     display: flex;
     align-items: center;
     justify-content: center;
 
-    cursor: pointer;
+    z-index: 5;
 
     transition:
-        transform 0.2s ease,
-        background 0.2s ease,
-        box-shadow 0.2s ease;
+        left 0.35s ease,
+        top 0.35s ease;
 }
 
-.arrow:hover {
-    background: #16251d;
+
+/* ARROW SHAFT */
+
+.arrow::before {
+    content: "";
+
+    position: absolute;
+
+    width: 72%;
+    height: 12%;
+
+    background: #39ff88;
+
+    border-radius: 999px;
 
     box-shadow:
-        0 0 18px rgba(57, 255, 136, 0.15);
+        0 0 10px rgba(57, 255, 136, 0.25);
+}
 
+
+/* ARROW HEAD */
+
+.arrow::after {
+    content: "";
+
+    position: absolute;
+
+    width: 0;
+    height: 0;
+
+    border-top: 18px solid transparent;
+    border-bottom: 18px solid transparent;
+    border-left: 28px solid #39ff88;
+
+    right: 3%;
+
+    filter:
+        drop-shadow(0 0 6px rgba(57, 255, 136, 0.25));
+}
+
+
+/* HOVER */
+
+.arrow:hover {
     transform:
         translate(-50%, -50%)
         scale(1.08);
 }
 
-.arrow:active {
-    transform:
-        translate(-50%, -50%)
-        scale(0.94);
+
+/* =========================
+   DIRECTION ROTATION
+========================= */
+
+.arrow[data-direction="right"] {
+    transform: translate(-50%, -50%) rotate(0deg);
+}
+
+.arrow[data-direction="down"] {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.arrow[data-direction="left"] {
+    transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.arrow[data-direction="up"] {
+    transform: translate(-50%, -50%) rotate(270deg);
 }
 
 
-/* BLOCKED */
+/* =========================
+   CLASH
+========================= */
 
 .arrow.blocked {
-    animation: shake 0.25s ease;
-    border-color: #ff5555;
-    color: #ff7777;
+    animation: arrowClash 0.35s ease;
+}
+
+.arrow.blocked::before {
+    background: #ff4d4d;
+
+    box-shadow:
+        0 0 16px rgba(255, 77, 77, 0.7);
+}
+
+.arrow.blocked::after {
+    border-left-color: #ff4d4d;
+
+    filter:
+        drop-shadow(0 0 10px rgba(255, 77, 77, 0.7));
 }
 
 
-/* ESCAPING */
+/* =========================
+   ESCAPE
+========================= */
 
 .arrow.escaping {
     pointer-events: none;
 
-    animation: escape 0.35s ease forwards;
+    animation: arrowEscape 0.55s ease-in forwards;
 }
 
 
-/* ANIMATIONS */
+/* =========================
+   ANIMATIONS
+========================= */
 
-@keyframes shake {
+@keyframes arrowClash {
 
     0% {
-        transform: translate(-50%, -50%);
+        transform:
+            translate(-50%, -50%)
+            scale(1);
     }
 
-    25% {
-        transform: translate(
-            calc(-50% - 6px),
-            -50%
-        );
+    20% {
+        transform:
+            translate(-50%, -50%)
+            scale(1.08);
     }
 
-    50% {
-        transform: translate(
-            calc(-50% + 6px),
-            -50%
-        );
+    40% {
+        transform:
+            translate(
+                calc(-50% - 7px),
+                -50%
+            )
+            scale(1.02);
     }
 
-    75% {
-        transform: translate(
-            calc(-50% - 4px),
-            -50%
-        );
+    60% {
+        transform:
+            translate(
+                calc(-50% + 7px),
+                -50%
+            )
+            scale(1.02);
+    }
+
+    80% {
+        transform:
+            translate(
+                calc(-50% - 3px),
+                -50%
+            );
     }
 
     100% {
-        transform: translate(-50%, -50%);
+        transform:
+            translate(-50%, -50%)
+            scale(1);
     }
 }
 
 
-@keyframes escape {
+@keyframes arrowEscape {
 
     0% {
-        transform: translate(-50%, -50%) scale(1);
+        transform:
+            translate(-50%, -50%)
+            scale(1);
+
         opacity: 1;
     }
 
     100% {
-        transform: translate(-50%, -50%) scale(0.2);
+        transform:
+            translate(
+                var(--escape-x),
+                var(--escape-y)
+            )
+            scale(1);
+
         opacity: 0;
+    }
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 600px) {
+
+    .arrow {
+        width: 19%;
+        height: 19%;
+    }
+
+    .arrow::after {
+        border-top-width: 14px;
+        border-bottom-width: 14px;
+        border-left-width: 22px;
     }
 }
