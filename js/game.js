@@ -5,10 +5,11 @@
 
 
 /* =========================================================
-   DIRECTION DATA
+   DIRECTIONS
 ========================================================= */
 
 const DIRS = {
+
     up: {
         dr: -1,
         dc: 0
@@ -28,14 +29,16 @@ const DIRS = {
         dr: 0,
         dc: 1
     }
+
 };
 
 
 /* =========================================================
-   DIFFICULTY SETTINGS
+   DIFFICULTIES
 ========================================================= */
 
 const DIFFICULTIES = {
+
     Easy: {
         rows: 6,
         cols: 6,
@@ -67,11 +70,12 @@ const DIFFICULTIES = {
         zoomPan: true,
         gridToggle: true
     }
+
 };
 
 
 /* =========================================================
-   GAME STATE
+   STATE
 ========================================================= */
 
 let currentLevel = 1;
@@ -82,39 +86,56 @@ let rows = 6;
 let cols = 6;
 let cellPx = 48;
 
-let zoomPan = false;
+let worldWidth = 0;
+let worldHeight = 0;
 
 let board = {};
+
 let present = new Set();
+
 let solveOrder = [];
 
 let clearedCount = 0;
+
 let lives = 3;
 
 let moveHistory = [];
 
 let gameLocked = false;
 
-let worldWidth = 0;
-let worldHeight = 0;
+let zoomPan = false;
+
+let gridVisible = false;
+
+
+/* =========================================================
+   ZOOM STATE
+========================================================= */
 
 let scale = 1;
 let panX = 0;
 let panY = 0;
 
-let gridVisible = false;
+const pointers = new Map();
 
-let hintTimeout = null;
+let gesture = null;
 
 
 /* =========================================================
-   DOM REFERENCES
+   DOM
 ========================================================= */
 
-const boardWrap = document.getElementById("boardWrap");
-const boardSvg = document.getElementById("boardSvg");
-const world = document.getElementById("world");
-const gridGroup = document.getElementById("gridGroup");
+const boardWrap =
+    document.getElementById("boardWrap");
+
+const boardSvg =
+    document.getElementById("boardSvg");
+
+const world =
+    document.getElementById("world");
+
+const gridGroup =
+    document.getElementById("gridGroup");
 
 const difficultyNameElement =
     document.getElementById("difficultyName");
@@ -178,38 +199,16 @@ const newPuzzleButton =
 
 
 /* =========================================================
-   BASIC HELPERS
+   HELPERS
 ========================================================= */
-
-function svgElement(name, attributes = {}) {
-    const element = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        name
-    );
-
-    for (const [key, value] of Object.entries(attributes)) {
-        element.setAttribute(key, String(value));
-    }
-
-    return element;
-}
-
-
-function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-}
-
 
 function keyFor(r, c) {
     return `${r},${c}`;
 }
 
 
-/* =========================================================
-   BOARD BOUNDS
-========================================================= */
-
 function inBounds(r, c, rows, cols) {
+
     return (
         r >= 0 &&
         r < rows &&
@@ -220,37 +219,51 @@ function inBounds(r, c, rows, cols) {
 
 
 /* =========================================================
-   SINGLE SOURCE OF TRUTH FOR PATH CLEARANCE
+   SINGLE SOURCE OF TRUTH
 ========================================================= */
 
-/*
-    Is the straight line from (r,c) to the edge, in `dir`,
-    free of any still-present arrow?
+function isPathClear(
+    r,
+    c,
+    dir,
+    rows,
+    cols,
+    present
+) {
 
-    This function is used by BOTH:
+    const {
+        dr,
+        dc
+    } = DIRS[dir];
 
-    1. Level generation
-    2. Live gameplay
-
-    This prevents the generator and gameplay from ever
-    disagreeing about what counts as a legal move.
-*/
-
-function isPathClear(r, c, dir, rows, cols, present) {
-    const { dr, dc } = DIRS[dir];
 
     let nr = r + dr;
     let nc = c + dc;
 
-    while (inBounds(nr, nc, rows, cols)) {
 
-        if (present.has(`${nr},${nc}`)) {
+    while (
+        inBounds(
+            nr,
+            nc,
+            rows,
+            cols
+        )
+    ) {
+
+        if (
+            present.has(
+                `${nr},${nc}`
+            )
+        ) {
+
             return false;
         }
+
 
         nr += dr;
         nc += dc;
     }
+
 
     return true;
 }
@@ -261,87 +274,109 @@ function isPathClear(r, c, dir, rows, cols, present) {
 ========================================================= */
 
 /*
-    IMPORTANT:
+    We NEVER randomly assign directions and hope.
 
-    We do NOT randomly assign directions to all cells.
+    Instead we build a valid solution backwards.
 
-    Random directions can create impossible / locked boards.
-
-    Instead, we construct the puzzle by simulating a legal
-    solve in reverse.
+    `present` starts with every cell.
 
     At every step:
 
-    - present contains all arrows that have NOT yet been
-      "cleared" in the simulation.
-    - We find cells that currently have at least one legal
-      direction.
-    - We assign one of those legal directions to the cell.
-    - We remove that cell from the simulation.
+      1. Find cells that currently have a legal exit.
+      2. Choose one.
+      3. Give it one of its currently legal directions.
+      4. Remove it from the simulation.
 
-    Why can `candidates` never be empty?
+    WHY CAN candidates NEVER BE EMPTY?
 
-    Take whichever remaining cell has the smallest column
-    index (the left-most surviving arrow).
+    Consider the remaining cell with the smallest column index.
 
-    Every cell to its left in that row must already be cleared.
-    Otherwise that cell would also still be remaining and would
-    have an even smaller column index, contradicting our choice.
+    Every cell to its left in the same row must already have
+    been removed from `present`.
 
-    Therefore `left` is always a legal direction for that cell.
+    Otherwise there would still be a surviving cell with an
+    even smaller column index.
 
-    So the generation loop can never stall.
+    Therefore LEFT is always clear for that cell.
 
-    Because an arrow is assigned a direction only when that
-    direction is currently legal, and all cells only disappear
-    from `present` after that point, the recorded solveOrder
-    remains valid when replayed later.
+    So there is always at least one candidate.
 
-    Result:
-
-        Generated board
-              ↓
-        Known legal solveOrder
-              ↓
-        100% solvable puzzle
+    Because every direction is assigned while it is legal,
+    replaying solveOrder from the original full board is
+    guaranteed to clear every arrow.
 */
 
-function generateSolvableBoard(rows, cols) {
+function generateSolvableBoard(
+    rows,
+    cols
+) {
 
-    const present = new Set();
+    const generationPresent =
+        new Set();
 
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            present.add(`${r},${c}`);
+
+    for (
+        let r = 0;
+        r < rows;
+        r++
+    ) {
+
+        for (
+            let c = 0;
+            c < cols;
+            c++
+        ) {
+
+            generationPresent.add(
+                keyFor(r, c)
+            );
         }
     }
 
-    const board = {};
-    const solveOrder = [];
 
-    while (present.size > 0) {
+    const generatedBoard = {};
+
+    const generatedSolveOrder = [];
+
+
+    while (
+        generationPresent.size > 0
+    ) {
 
         const candidates = [];
 
-        for (const key of present) {
 
-            const [r, c] = key
-                .split(",")
-                .map(Number);
+        for (
+            const key
+            of generationPresent
+        ) {
+
+            const [
+                r,
+                c
+            ] =
+                key
+                    .split(",")
+                    .map(Number);
+
 
             const validDirs =
-                Object.keys(DIRS).filter(dir =>
-                    isPathClear(
-                        r,
-                        c,
-                        dir,
-                        rows,
-                        cols,
-                        present
-                    )
-                );
+                Object.keys(DIRS)
+                    .filter(dir =>
+                        isPathClear(
+                            r,
+                            c,
+                            dir,
+                            rows,
+                            cols,
+                            generationPresent
+                        )
+                    );
 
-            if (validDirs.length > 0) {
+
+            if (
+                validDirs.length > 0
+            ) {
 
                 candidates.push({
                     r,
@@ -353,17 +388,12 @@ function generateSolvableBoard(rows, cols) {
         }
 
 
-        /*
-            This should NEVER happen.
+        if (
+            candidates.length === 0
+        ) {
 
-            The proof above guarantees that at least the
-            left-most surviving cell has a legal `left`
-            direction.
-        */
-
-        if (candidates.length === 0) {
             throw new Error(
-                "Level generation stalled. This should never happen."
+                "Level generation stalled."
             );
         }
 
@@ -371,7 +401,8 @@ function generateSolvableBoard(rows, cols) {
         const pick =
             candidates[
                 Math.floor(
-                    Math.random() * candidates.length
+                    Math.random() *
+                    candidates.length
                 )
             ];
 
@@ -385,53 +416,54 @@ function generateSolvableBoard(rows, cols) {
             ];
 
 
-        board[pick.key] = {
+        generatedBoard[pick.key] = {
             row: pick.r,
             col: pick.c,
             dir
         };
 
-        solveOrder.push({
+
+        generatedSolveOrder.push({
             row: pick.r,
             col: pick.c,
             dir
         });
 
-        present.delete(pick.key);
+
+        generationPresent.delete(
+            pick.key
+        );
     }
 
 
     /*
-        Extra verification.
-
-        The generation method already proves solvability,
-        but verifying the generated solve order gives us a
-        second safety check during development.
+        Verify our generated board before displaying it.
     */
 
     if (
         !verifyGeneratedBoard(
-            board,
-            solveOrder,
+            generatedBoard,
+            generatedSolveOrder,
             rows,
             cols
         )
     ) {
+
         throw new Error(
-            "Generated board failed solvability verification."
+            "Generated board failed verification."
         );
     }
 
 
     return {
-        board,
-        solveOrder
+        board: generatedBoard,
+        solveOrder: generatedSolveOrder
     };
 }
 
 
 /* =========================================================
-   SOLUTION VERIFICATION
+   VERIFY SOLUTION
 ========================================================= */
 
 function verifyGeneratedBoard(
@@ -442,16 +474,27 @@ function verifyGeneratedBoard(
 ) {
 
     const simulation =
-        new Set(Object.keys(board));
+        new Set(
+            Object.keys(board)
+        );
 
 
-    for (const move of solveOrder) {
+    for (
+        const move
+        of solveOrder
+    ) {
 
         const key =
-            `${move.row},${move.col}`;
+            keyFor(
+                move.row,
+                move.col
+            );
 
 
-        if (!simulation.has(key)) {
+        if (
+            !simulation.has(key)
+        ) {
+
             return false;
         }
 
@@ -470,6 +513,7 @@ function verifyGeneratedBoard(
                 simulation
             )
         ) {
+
             return false;
         }
 
@@ -478,12 +522,14 @@ function verifyGeneratedBoard(
     }
 
 
-    return simulation.size === 0;
+    return (
+        simulation.size === 0
+    );
 }
 
 
 /* =========================================================
-   DIFFICULTY BY LEVEL
+   LEVEL DIFFICULTY
 ========================================================= */
 
 function getDifficultyForLevel(level) {
@@ -510,24 +556,58 @@ function getDifficultyForLevel(level) {
 
 function loadLevel(level) {
 
-    currentLevel = Math.max(1, level);
+    currentLevel =
+        Math.max(1, level);
+
 
     difficultyName =
-        getDifficultyForLevel(currentLevel);
+        getDifficultyForLevel(
+            currentLevel
+        );
+
 
     const settings =
-        DIFFICULTIES[difficultyName];
+        DIFFICULTIES[
+            difficultyName
+        ];
 
-    rows = settings.rows;
-    cols = settings.cols;
-    cellPx = settings.cellPx;
-    zoomPan = settings.zoomPan;
+
+    rows =
+        settings.rows;
+
+    cols =
+        settings.cols;
+
+    cellPx =
+        settings.cellPx;
+
+    zoomPan =
+        settings.zoomPan;
+
 
     worldWidth =
         cols * cellPx;
 
     worldHeight =
         rows * cellPx;
+
+
+    /*
+        THIS WAS THE BIG BUG IN THE OLD VERSION.
+
+        The SVG now knows exactly how large our game world is.
+    */
+
+    boardSvg.setAttribute(
+        "viewBox",
+        `0 0 ${worldWidth} ${worldHeight}`
+    );
+
+
+    boardSvg.setAttribute(
+        "preserveAspectRatio",
+        "xMidYMid meet"
+    );
 
 
     const generated =
@@ -537,18 +617,27 @@ function loadLevel(level) {
         );
 
 
-    board = generated.board;
-    solveOrder = generated.solveOrder;
+    board =
+        generated.board;
+
+    solveOrder =
+        generated.solveOrder;
+
 
     present =
-        new Set(Object.keys(board));
+        new Set(
+            Object.keys(board)
+        );
+
 
     clearedCount = 0;
+
     lives = 3;
 
     moveHistory = [];
 
     gameLocked = false;
+
 
     resetView();
 
@@ -559,6 +648,7 @@ function loadLevel(level) {
     updateUI();
 
     updateZoomUI();
+
 
     setStatus(
         "Clear all the arrows."
@@ -573,20 +663,27 @@ function loadLevel(level) {
 function retrySameBoard() {
 
     present =
-        new Set(Object.keys(board));
+        new Set(
+            Object.keys(board)
+        );
 
     clearedCount = 0;
+
     lives = 3;
 
     moveHistory = [];
 
     gameLocked = false;
 
+
     hideOverlays();
+
+    resetView();
 
     renderBoard();
 
     updateUI();
+
 
     setStatus(
         "Same puzzle. Try a different order."
@@ -595,11 +692,14 @@ function retrySameBoard() {
 
 
 /* =========================================================
-   RESTART = NEW PUZZLE AT SAME LEVEL
+   NEW PUZZLE
 ========================================================= */
 
 function restartCurrentLevel() {
-    loadLevel(currentLevel);
+
+    loadLevel(
+        currentLevel
+    );
 
     setStatus(
         "New puzzle generated."
@@ -616,18 +716,24 @@ function updateUI() {
     difficultyNameElement.textContent =
         difficultyName;
 
+
     levelLabelElement.textContent =
         `Level ${currentLevel}`;
+
 
     updateHeartsUI();
 
     updateProgress();
 
+
     undoButton.disabled =
         moveHistory.length === 0;
 
+
     gridToggle.disabled =
-        !DIFFICULTIES[difficultyName].gridToggle;
+        !DIFFICULTIES[
+            difficultyName
+        ].gridToggle;
 }
 
 
@@ -636,47 +742,76 @@ function updateProgress() {
     const total =
         rows * cols;
 
+
     progressText.textContent =
         `${clearedCount} / ${total}`;
 
-    const percent =
+
+    const percentage =
         total === 0
             ? 0
-            : (clearedCount / total) * 100;
+            : (
+                clearedCount /
+                total
+            ) * 100;
+
 
     progressFill.style.width =
-        `${percent}%`;
+        `${percentage}%`;
 }
 
 
-function updateHeartsUI(lostHeartIndex = -1) {
+function updateHeartsUI(
+    lostHeartIndex = -1
+) {
 
     heartsElement.innerHTML = "";
+
 
     heartsElement.setAttribute(
         "aria-label",
         `${lives} lives remaining`
     );
 
-    for (let i = 0; i < 3; i++) {
+
+    for (
+        let i = 0;
+        i < 3;
+        i++
+    ) {
 
         const heart =
-            document.createElement("span");
+            document.createElement(
+                "span"
+            );
 
-        heart.className = "heart";
+
+        heart.className =
+            "heart";
+
 
         heart.textContent =
             i < lives
                 ? "♥"
                 : "♡";
 
+
         if (i >= lives) {
-            heart.classList.add("empty");
+            heart.classList.add(
+                "empty"
+            );
         }
 
-        if (i === lostHeartIndex) {
-            heart.classList.add("breaking");
+
+        if (
+            i === lostHeartIndex
+        ) {
+
+            heart.classList.add(
+                "breaking"
+            );
         }
+
 
         heartsElement.appendChild(
             heart
@@ -693,46 +828,61 @@ function setStatus(message) {
 
 
 /* =========================================================
-   BOARD GRID
+   GRID
 ========================================================= */
 
 function renderGrid() {
 
     gridGroup.innerHTML = "";
 
-    for (let c = 0; c <= cols; c++) {
+
+    for (
+        let c = 0;
+        c <= cols;
+        c++
+    ) {
 
         const x =
             c * cellPx;
 
-        const line =
-            svgElement("line", {
-                x1: x,
-                y1: 0,
-                x2: x,
-                y2: worldHeight,
-                class: "grid-line"
-            });
 
-        gridGroup.appendChild(line);
+        gridGroup.appendChild(
+            svgElement(
+                "line",
+                {
+                    x1: x,
+                    y1: 0,
+                    x2: x,
+                    y2: worldHeight,
+                    class: "grid-line"
+                }
+            )
+        );
     }
 
 
-    for (let r = 0; r <= rows; r++) {
+    for (
+        let r = 0;
+        r <= rows;
+        r++
+    ) {
 
         const y =
             r * cellPx;
 
-        const line =
-            svgElement("line", {
-                x1: 0,
-                y1: y,
-                x2: worldWidth,
-                y2: y,
-                class: "grid-line"
-            });
 
-        gridGroup.appendChild(line);
+        gridGroup.appendChild(
+            svgElement(
+                "line",
+                {
+                    x1: 0,
+                    y1: y,
+                    x2: worldWidth,
+                    y2: y,
+                    class: "grid-line"
+                }
+            )
+        );
     }
 
 
@@ -744,17 +894,58 @@ function renderGrid() {
 
 
 /* =========================================================
-   ARROW VISUAL CREATION
+   SVG HELPER
 ========================================================= */
 
-function createArrowCell(r, c, dir) {
+function svgElement(
+    name,
+    attributes = {}
+) {
+
+    const element =
+        document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            name
+        );
+
+
+    for (
+        const [
+            key,
+            value
+        ]
+        of Object.entries(attributes)
+    ) {
+
+        element.setAttribute(
+            key,
+            value
+        );
+    }
+
+
+    return element;
+}
+
+
+/* =========================================================
+   ARROW CREATION
+========================================================= */
+
+function createArrowCell(
+    r,
+    c,
+    dir
+) {
 
     const key =
         keyFor(r, c);
 
+
     const centerX =
         c * cellPx +
         cellPx / 2;
+
 
     const centerY =
         r * cellPx +
@@ -762,102 +953,188 @@ function createArrowCell(r, c, dir) {
 
 
     const angleMap = {
+
         right: 0,
+
         down: 90,
+
         left: 180,
+
         up: -90
+
     };
 
 
+    const strokeWidth =
+        Math.max(
+            2.8,
+            cellPx * 0.085
+        );
+
+
     /*
-        Outer group:
+        OUTER GROUP
 
-        Responsible for movement.
+        Handles movement.
 
-        Inner group:
+        INNER GROUP
 
-        Responsible for direction rotation.
+        Handles direction.
 
-        Keeping those transforms separate prevents the
-        movement animation from fighting the arrow rotation.
+        Keeping these separate avoids the transform problems
+        from the previous version.
     */
 
     const outer =
-        svgElement("g", {
-            class: "arrow-cell",
-            "data-key": key,
-            "data-row": r,
-            "data-col": c,
-            "aria-label":
-                `${dir} arrow at row ${r + 1}, column ${c + 1}`,
-            transform:
-                `translate(${centerX} ${centerY})`
-        });
+        svgElement(
+            "g",
+            {
+                class: "arrow-cell",
+
+                "data-key": key,
+
+                "data-row": r,
+
+                "data-col": c,
+
+                role: "gridcell",
+
+                "aria-label":
+                    `${dir} arrow`
+            }
+        );
+
+
+    const movement =
+        svgElement(
+            "g",
+            {
+                transform:
+                    `translate(${centerX} ${centerY})`
+            }
+        );
 
 
     const visual =
-        svgElement("g", {
-            class: "arrow-visual",
-            transform:
-                `rotate(${angleMap[dir]})`
-        });
+        svgElement(
+            "g",
+            {
+                class: "arrow-visual",
+
+                style:
+                    `--arrow-stroke:${strokeWidth}px`,
+
+                transform:
+                    `rotate(${angleMap[dir]})`
+            }
+        );
 
 
     /*
-        Arrow points RIGHT by default.
+        MUCH LONGER SHAFT.
 
-        Other directions are created by rotating this one
-        inner SVG group.
+        Old version:
+            -0.44 → 0.19
+
+        New version:
+            -0.48 → 0.32
+
+        This lets neighboring arrows visually flow into
+        each other instead of looking like disconnected sticks.
     */
 
     const shaft =
-        svgElement("line", {
-            x1: -cellPx * 0.44,
-            y1: 0,
-            x2: cellPx * 0.19,
-            y2: 0,
-            class: "arrow-shaft"
-        });
+        svgElement(
+            "line",
+            {
+                x1:
+                    -cellPx * 0.48,
+
+                y1: 0,
+
+                x2:
+                    cellPx * 0.32,
+
+                y2: 0,
+
+                class: "arrow-shaft"
+            }
+        );
 
 
     /*
-        Small triangular arrowhead.
+        SMALL ARROWHEAD NEAR THE CELL EDGE
     */
 
     const head =
-        svgElement("polygon", {
-            points: [
-                `${cellPx * 0.15},${-cellPx * 0.16}`,
-                `${cellPx * 0.49},0`,
-                `${cellPx * 0.15},${cellPx * 0.16}`
-            ].join(" "),
-            class: "arrow-head"
-        });
+        svgElement(
+            "polygon",
+            {
+                points: [
+                    `${cellPx * 0.28},${-cellPx * 0.13}`,
+
+                    `${cellPx * 0.50},0`,
+
+                    `${cellPx * 0.28},${cellPx * 0.13}`
+                ].join(" "),
+
+                class: "arrow-head"
+            }
+        );
 
 
     /*
-        Invisible full-cell click target.
-
-        Every cell remains clickable even where the visual arrow
-        itself doesn't cover every pixel.
+        FULL-CELL HIT TARGET
     */
 
     const hit =
-        svgElement("rect", {
-            x: -cellPx / 2,
-            y: -cellPx / 2,
-            width: cellPx,
-            height: cellPx,
-            rx: Math.max(3, cellPx * 0.08),
-            class: "arrow-hit"
-        });
+        svgElement(
+            "rect",
+            {
+                x:
+                    -cellPx / 2,
+
+                y:
+                    -cellPx / 2,
+
+                width:
+                    cellPx,
+
+                height:
+                    cellPx,
+
+                rx:
+                    Math.max(
+                        2,
+                        cellPx * 0.04
+                    ),
+
+                class:
+                    "arrow-hit"
+            }
+        );
 
 
-    visual.appendChild(shaft);
-    visual.appendChild(head);
+    visual.appendChild(
+        shaft
+    );
 
-    outer.appendChild(visual);
-    outer.appendChild(hit);
+    visual.appendChild(
+        head
+    );
+
+    movement.appendChild(
+        visual
+    );
+
+    outer.appendChild(
+        movement
+    );
+
+    outer.appendChild(
+        hit
+    );
+
 
     return outer;
 }
@@ -869,21 +1146,28 @@ function createArrowCell(r, c, dir) {
 
 function renderBoard() {
 
-    world.innerHTML = "";
-
     /*
-        Grid is added first so arrows are always drawn above it.
+        Don't accidentally lose the grid group.
     */
 
-    world.appendChild(gridGroup);
+    world.innerHTML = "";
+
+    world.appendChild(
+        gridGroup
+    );
+
 
     renderGrid();
 
 
-    for (const key of present) {
+    for (
+        const key
+        of present
+    ) {
 
         const piece =
             board[key];
+
 
         const arrow =
             createArrowCell(
@@ -892,21 +1176,9 @@ function renderBoard() {
                 piece.dir
             );
 
+
         world.appendChild(
             arrow
-        );
-    }
-
-
-    /*
-        Reinsert the grid group if innerHTML operations ever
-        changed its position.
-    */
-
-    if (gridGroup.parentNode !== world) {
-        world.insertBefore(
-            gridGroup,
-            world.firstChild
         );
     }
 }
@@ -925,12 +1197,26 @@ function playExitAnimation(
     const key =
         keyFor(r, c);
 
+
     const arrow =
         world.querySelector(
             `[data-key="${key}"]`
         );
 
+
     if (!arrow) {
+        return;
+    }
+
+
+    const movement =
+        arrow.querySelector(
+            ".arrow-visual"
+        )
+            ?.parentElement;
+
+
+    if (!movement) {
         return;
     }
 
@@ -938,9 +1224,11 @@ function playExitAnimation(
     const piece =
         board[key];
 
+
     const startX =
         piece.col * cellPx +
         cellPx / 2;
+
 
     const startY =
         piece.row * cellPx +
@@ -950,28 +1238,34 @@ function playExitAnimation(
     let targetX =
         startX;
 
+
     let targetY =
         startY;
 
 
     const extra =
-        cellPx * 0.80;
+        cellPx;
 
 
     if (dir === "right") {
         targetX =
-            worldWidth + extra;
+            worldWidth +
+            extra;
     }
+
 
     if (dir === "left") {
         targetX =
             -extra;
     }
 
+
     if (dir === "down") {
         targetY =
-            worldHeight + extra;
+            worldHeight +
+            extra;
     }
+
 
     if (dir === "up") {
         targetY =
@@ -979,35 +1273,47 @@ function playExitAnimation(
     }
 
 
-    const deltaX =
-        targetX - startX;
+    const dx =
+        targetX -
+        startX;
 
-    const deltaY =
-        targetY - startY;
+
+    const dy =
+        targetY -
+        startY;
 
 
     arrow.style.pointerEvents =
         "none";
 
 
-    const translation =
+    const animation =
         svgElement(
             "animateTransform",
             {
-                attributeName: "transform",
-                attributeType: "XML",
-                type: "translate",
+                attributeName:
+                    "transform",
 
-                from: "0 0",
+                attributeType:
+                    "XML",
+
+                type:
+                    "translate",
+
+                from:
+                    "0 0",
 
                 to:
-                    `${deltaX} ${deltaY}`,
+                    `${dx} ${dy}`,
 
-                dur: "200ms",
+                dur:
+                    "190ms",
 
-                fill: "freeze",
+                fill:
+                    "freeze",
 
-                additive: "sum"
+                additive:
+                    "sum"
             }
         );
 
@@ -1016,45 +1322,59 @@ function playExitAnimation(
         svgElement(
             "animate",
             {
-                attributeName: "opacity",
+                attributeName:
+                    "opacity",
 
-                from: "1",
-                to: "0",
+                from:
+                    "1",
 
-                dur: "190ms",
+                to:
+                    "0",
 
-                fill: "freeze"
+                dur:
+                    "180ms",
+
+                fill:
+                    "freeze"
             }
         );
 
 
-    arrow.appendChild(
-        translation
+    movement.appendChild(
+        animation
     );
+
 
     arrow.appendChild(
         opacity
     );
 
 
-    translation.beginElement();
+    animation.beginElement();
+
     opacity.beginElement();
 
 
-    window.setTimeout(() => {
+    window.setTimeout(
+        () => {
 
-        if (arrow.parentNode) {
-            arrow.parentNode.removeChild(
-                arrow
-            );
-        }
+            if (
+                arrow.parentNode
+            ) {
 
-    }, 220);
+                arrow.parentNode.removeChild(
+                    arrow
+                );
+            }
+
+        },
+        210
+    );
 }
 
 
 /* =========================================================
-   ILLEGAL MOVE FEEDBACK
+   ILLEGAL MOVE
 ========================================================= */
 
 function playShakeAnimation(
@@ -1065,10 +1385,12 @@ function playShakeAnimation(
     const key =
         keyFor(r, c);
 
+
     const arrow =
         world.querySelector(
             `[data-key="${key}"]`
         );
+
 
     if (!arrow) {
         return;
@@ -1081,86 +1403,39 @@ function playShakeAnimation(
         );
 
 
-    if (visual) {
-
-        visual.classList.remove(
-            "blocked"
-        );
-
-        /*
-            Force browser to restart the flash animation.
-        */
-
-        void visual.offsetWidth;
-
-        visual.classList.add(
-            "blocked"
-        );
-
-        window.setTimeout(() => {
-            visual.classList.remove(
-                "blocked"
-            );
-        }, 220);
+    if (!visual) {
+        return;
     }
 
 
-    /*
-        Shake is deliberately tiny because cell sizes can become
-        as small as 24px on Nightmare.
-    */
-
-    const shake =
-        cellPx * 0.075;
-
-
-    const animation =
-        svgElement(
-            "animateTransform",
-            {
-                attributeName: "transform",
-                attributeType: "XML",
-                type: "translate",
-
-                values: [
-                    "0 0",
-                    `${-shake} 0`,
-                    `${shake} 0`,
-                    `${-shake * 0.65} 0`,
-                    `${shake * 0.65} 0`,
-                    "0 0"
-                ].join(";"),
-
-                dur: "200ms",
-
-                fill: "freeze",
-
-                additive: "sum"
-            }
-        );
-
-
-    arrow.appendChild(
-        animation
+    visual.classList.remove(
+        "blocked"
     );
 
-    animation.beginElement();
+
+    void visual.offsetWidth;
 
 
-    window.setTimeout(() => {
+    visual.classList.add(
+        "blocked"
+    );
 
-        if (animation.parentNode) {
-            animation.parentNode.removeChild(
-                animation
+
+    window.setTimeout(
+        () => {
+
+            visual.classList.remove(
+                "blocked"
             );
-        }
 
-    }, 220);
+        },
+        220
+    );
 }
 
 
 /* =========================================================
-   RUNTIME TAP HANDLER
+   TAP
 ========================================================= */
 
 function handleTap(
@@ -1177,10 +1452,6 @@ function handleTap(
         keyFor(r, c);
 
 
-    /*
-        Already cleared arrows are ignored.
-    */
-
     if (!present.has(key)) {
         return;
     }
@@ -1191,7 +1462,7 @@ function handleTap(
 
 
     /*
-        Use the SAME path-clear function used during generation.
+        SAME path check used by the generator.
     */
 
     if (
@@ -1206,12 +1477,18 @@ function handleTap(
     ) {
 
         /*
-            Legal move.
+            LEGAL
         */
 
-        present.delete(key);
+        present.delete(
+            key
+        );
 
-        moveHistory.push(key);
+
+        moveHistory.push(
+            key
+        );
+
 
         clearedCount++;
 
@@ -1225,7 +1502,9 @@ function handleTap(
 
         updateProgress();
 
-        undoButton.disabled = false;
+
+        undoButton.disabled =
+            false;
 
 
         if (
@@ -1247,13 +1526,14 @@ function handleTap(
     } else {
 
         /*
-            Illegal move.
+            ILLEGAL
 
-            Exactly ONE life is removed.
+            Exactly one life lost.
         */
 
         const lostHeartIndex =
             lives - 1;
+
 
         lives--;
 
@@ -1289,14 +1569,20 @@ function handleTap(
 
 
 /* =========================================================
-   HINT SYSTEM
+   HINT
 ========================================================= */
 
 function getHint() {
 
-    for (const key of present) {
+    for (
+        const key
+        of present
+    ) {
 
-        const [r, c] =
+        const [
+            r,
+            c
+        ] =
             key
                 .split(",")
                 .map(Number);
@@ -1318,6 +1604,7 @@ function getHint() {
                 present
             )
         ) {
+
             return {
                 r,
                 c
@@ -1384,32 +1671,29 @@ function useHint() {
         "hint"
     );
 
+
     void visual.offsetWidth;
+
 
     visual.classList.add(
         "hint"
     );
 
 
-    if (hintTimeout) {
-        window.clearTimeout(
-            hintTimeout
-        );
-    }
+    setStatus(
+        "Hint: this arrow can leave now."
+    );
 
 
-    hintTimeout =
-        window.setTimeout(() => {
+    window.setTimeout(
+        () => {
 
             visual.classList.remove(
                 "hint"
             );
 
-        }, 1600);
-
-
-    setStatus(
-        "Hint: this arrow can be cleared now."
+        },
+        1600
     );
 }
 
@@ -1425,7 +1709,9 @@ function undoLastMove() {
     }
 
 
-    if (moveHistory.length === 0) {
+    if (
+        moveHistory.length === 0
+    ) {
         return;
     }
 
@@ -1439,16 +1725,22 @@ function undoLastMove() {
         !present.has(key)
     ) {
 
-        present.add(key);
+        present.add(
+            key
+        );
+
 
         clearedCount--;
+
 
         renderBoard();
 
         updateProgress();
 
+
         undoButton.disabled =
             moveHistory.length === 0;
+
 
         setStatus(
             "Last cleared arrow restored."
@@ -1458,7 +1750,7 @@ function undoLastMove() {
 
 
 /* =========================================================
-   GRID TOGGLE
+   GRID
 ========================================================= */
 
 function toggleGrid() {
@@ -1468,6 +1760,7 @@ function toggleGrid() {
             difficultyName
         ].gridToggle
     ) {
+
         return;
     }
 
@@ -1490,7 +1783,7 @@ function toggleGrid() {
 
 
 /* =========================================================
-   VIEW / ZOOM
+   VIEW
 ========================================================= */
 
 function resetView() {
@@ -1499,6 +1792,7 @@ function resetView() {
 
     panX = 0;
     panY = 0;
+
 
     applyWorldTransform();
 }
@@ -1514,11 +1808,6 @@ function applyWorldTransform() {
 
 
 function clampPan() {
-
-    /*
-        Allow a little overscroll but don't let the board
-        disappear completely.
-    */
 
     const margin =
         cellPx * 2;
@@ -1545,17 +1834,21 @@ function clampPan() {
 
 
     panX =
-        clamp(
-            panX,
-            minX,
+        Math.min(
+            Math.max(
+                panX,
+                minX
+            ),
             maxX
         );
 
 
     panY =
-        clamp(
-            panY,
-            minY,
+        Math.min(
+            Math.max(
+                panY,
+                minY
+            ),
             maxY
         );
 }
@@ -1568,6 +1861,7 @@ function updateZoomUI() {
         zoomPan
     );
 
+
     zoomTip.style.display =
         zoomPan
             ? "block"
@@ -1576,7 +1870,7 @@ function updateZoomUI() {
 
 
 /* =========================================================
-   CLIENT → SVG COORDINATES
+   SCREEN → SVG
 ========================================================= */
 
 function clientToSvg(
@@ -1587,8 +1881,12 @@ function clientToSvg(
     const point =
         boardSvg.createSVGPoint();
 
-    point.x = clientX;
-    point.y = clientY;
+
+    point.x =
+        clientX;
+
+    point.y =
+        clientY;
 
 
     const matrix =
@@ -1596,6 +1894,7 @@ function clientToSvg(
 
 
     if (!matrix) {
+
         return {
             x: 0,
             y: 0
@@ -1617,7 +1916,7 @@ function clientToSvg(
 
 
 /* =========================================================
-   ZOOM AROUND POINTER
+   ZOOM
 ========================================================= */
 
 function zoomAroundPoint(
@@ -1639,16 +1938,25 @@ function zoomAroundPoint(
 
 
     const worldX =
-        (point.x - panX) / scale;
+        (
+            point.x -
+            panX
+        ) / scale;
+
 
     const worldY =
-        (point.y - panY) / scale;
+        (
+            point.y -
+            panY
+        ) / scale;
 
 
     const newScale =
-        clamp(
-            scale * factor,
-            0.7,
+        Math.min(
+            Math.max(
+                scale * factor,
+                0.7
+            ),
             3
         );
 
@@ -1674,19 +1982,12 @@ function zoomAroundPoint(
 
 
 /* =========================================================
-   POINTER / TOUCH STATE
+   POINTERS
 ========================================================= */
 
-const pointers = new Map();
-
-let gesture = null;
-
-
-/* =========================================================
-   POINTER DOWN
-========================================================= */
-
-function handlePointerDown(event) {
+function handlePointerDown(
+    event
+) {
 
     const keyElement =
         event.target.closest
@@ -1712,20 +2013,14 @@ function handlePointerDown(event) {
     } catch (error) {
         /*
             Pointer capture is optional.
-            The game still works without it.
         */
     }
 
 
-    /*
-        Non-zoom difficulties:
-
-        Only care about simple taps.
-    */
-
     if (!zoomPan) {
 
         gesture = {
+
             mode: "tap",
 
             pointerId:
@@ -1743,19 +2038,19 @@ function handlePointerDown(event) {
                 keyElement
                     ? keyElement.dataset.key
                     : null
+
         };
 
         return;
     }
 
 
-    /*
-        First pointer = potential pan or tap.
-    */
-
-    if (pointers.size === 1) {
+    if (
+        pointers.size === 1
+    ) {
 
         gesture = {
+
             mode: "pan",
 
             pointerId:
@@ -1781,15 +2076,14 @@ function handlePointerDown(event) {
                     : null
         };
 
+
         return;
     }
 
 
-    /*
-        Second pointer = pinch gesture.
-    */
-
-    if (pointers.size === 2) {
+    if (
+        pointers.size === 2
+    ) {
 
         const points =
             Array.from(
@@ -1797,24 +2091,25 @@ function handlePointerDown(event) {
             );
 
 
-        const first =
+        const a =
             points[0];
 
-        const second =
+        const b =
             points[1];
 
 
         const centerX =
-            (first.x + second.x) / 2;
+            (a.x + b.x) / 2;
+
 
         const centerY =
-            (first.y + second.y) / 2;
+            (a.y + b.y) / 2;
 
 
         const distance =
             Math.hypot(
-                second.x - first.x,
-                second.y - first.y
+                b.x - a.x,
+                b.y - a.y
             );
 
 
@@ -1825,16 +2120,8 @@ function handlePointerDown(event) {
             );
 
 
-        const anchorWorldX =
-            (centerSvg.x - panX) /
-            scale;
-
-        const anchorWorldY =
-            (centerSvg.y - panY) /
-            scale;
-
-
         gesture = {
+
             mode: "pinch",
 
             startDistance:
@@ -1846,24 +2133,32 @@ function handlePointerDown(event) {
             startScale:
                 scale,
 
-            anchorWorldX,
-            anchorWorldY
+            anchorWorldX:
+                (
+                    centerSvg.x -
+                    panX
+                ) / scale,
+
+            anchorWorldY:
+                (
+                    centerSvg.y -
+                    panY
+                ) / scale
         };
     }
 }
 
 
-/* =========================================================
-   POINTER MOVE
-========================================================= */
-
-function handlePointerMove(event) {
+function handlePointerMove(
+    event
+) {
 
     if (
         !pointers.has(
             event.pointerId
         )
     ) {
+
         return;
     }
 
@@ -1882,10 +2177,6 @@ function handlePointerMove(event) {
     }
 
 
-    /*
-        Normal tap / non-zoom movement.
-    */
-
     if (
         !zoomPan &&
         gesture.mode === "tap"
@@ -1901,7 +2192,10 @@ function handlePointerMove(event) {
             );
 
 
-        if (distance > 8) {
+        if (
+            distance > 8
+        ) {
+
             gesture.moved = true;
         }
 
@@ -1910,24 +2204,20 @@ function handlePointerMove(event) {
     }
 
 
-    /*
-        One-finger pan.
-    */
-
     if (
         zoomPan &&
         pointers.size === 1 &&
         gesture.mode === "pan"
     ) {
 
-        const startSvg =
+        const start =
             clientToSvg(
                 gesture.startX,
                 gesture.startY
             );
 
 
-        const currentSvg =
+        const current =
             clientToSvg(
                 event.clientX,
                 event.clientY
@@ -1935,12 +2225,13 @@ function handlePointerMove(event) {
 
 
         const dx =
-            currentSvg.x -
-            startSvg.x;
+            current.x -
+            start.x;
+
 
         const dy =
-            currentSvg.y -
-            startSvg.y;
+            current.y -
+            start.y;
 
 
         if (
@@ -1949,6 +2240,7 @@ function handlePointerMove(event) {
                 dy
             ) > 5
         ) {
+
             gesture.moved = true;
         }
 
@@ -1956,6 +2248,7 @@ function handlePointerMove(event) {
         panX =
             gesture.startPanX +
             dx;
+
 
         panY =
             gesture.startPanY +
@@ -1970,10 +2263,6 @@ function handlePointerMove(event) {
     }
 
 
-    /*
-        Two-finger pinch + pan.
-    */
-
     if (
         zoomPan &&
         pointers.size === 2 &&
@@ -1986,35 +2275,38 @@ function handlePointerMove(event) {
             );
 
 
-        const first =
+        const a =
             points[0];
 
-        const second =
+        const b =
             points[1];
 
 
         const centerX =
-            (first.x + second.x) / 2;
+            (a.x + b.x) / 2;
+
 
         const centerY =
-            (first.y + second.y) / 2;
+            (a.y + b.y) / 2;
 
 
         const distance =
             Math.hypot(
-                second.x - first.x,
-                second.y - first.y
+                b.x - a.x,
+                b.y - a.y
             );
 
 
-        const newScale =
-            clamp(
-                gesture.startScale *
+        scale =
+            Math.min(
+                Math.max(
+                    gesture.startScale *
                     (
                         distance /
                         gesture.startDistance
                     ),
-                0.7,
+                    0.7
+                ),
                 3
             );
 
@@ -2024,10 +2316,6 @@ function handlePointerMove(event) {
                 centerX,
                 centerY
             );
-
-
-        scale =
-            newScale;
 
 
         panX =
@@ -2049,11 +2337,9 @@ function handlePointerMove(event) {
 }
 
 
-/* =========================================================
-   POINTER UP
-========================================================= */
-
-function handlePointerUp(event) {
+function handlePointerUp(
+    event
+) {
 
     const currentGesture =
         gesture;
@@ -2063,10 +2349,6 @@ function handlePointerUp(event) {
         event.pointerId
     );
 
-
-    /*
-        Simple tap.
-    */
 
     if (
         currentGesture &&
@@ -2087,11 +2369,6 @@ function handlePointerUp(event) {
                 .map(Number);
 
 
-        /*
-            In pinch-enabled mode, don't count a pointer
-            as a tap if another pointer was involved.
-        */
-
         if (
             !zoomPan ||
             pointers.size === 0
@@ -2105,19 +2382,14 @@ function handlePointerUp(event) {
     }
 
 
-    /*
-        If a pinch ends but one finger remains,
-        convert that remaining finger into a new pan gesture.
-    */
-
     if (
         zoomPan &&
         pointers.size === 1
     ) {
 
         const [
-            remainingId,
-            remainingPoint
+            id,
+            point
         ] =
             Array.from(
                 pointers.entries()
@@ -2125,27 +2397,24 @@ function handlePointerUp(event) {
 
 
         gesture = {
+
             mode: "pan",
 
-            pointerId:
-                remainingId,
+            pointerId: id,
 
-            startX:
-                remainingPoint.x,
+            startX: point.x,
 
-            startY:
-                remainingPoint.y,
+            startY: point.y,
 
-            startPanX:
-                panX,
+            startPanX: panX,
 
-            startPanY:
-                panY,
+            startPanY: panY,
 
             moved: true,
 
             tapKey: null
         };
+
 
         return;
     }
@@ -2155,11 +2424,9 @@ function handlePointerUp(event) {
 }
 
 
-/* =========================================================
-   POINTER CANCEL
-========================================================= */
-
-function handlePointerCancel(event) {
+function handlePointerCancel(
+    event
+) {
 
     pointers.delete(
         event.pointerId
@@ -2170,10 +2437,12 @@ function handlePointerCancel(event) {
 
 
 /* =========================================================
-   WHEEL ZOOM
+   WHEEL
 ========================================================= */
 
-function handleWheel(event) {
+function handleWheel(
+    event
+) {
 
     if (!zoomPan) {
         return;
@@ -2183,22 +2452,18 @@ function handleWheel(event) {
     event.preventDefault();
 
 
-    const factor =
-        event.deltaY < 0
-            ? 1.10
-            : 0.90;
-
-
     zoomAroundPoint(
         event.clientX,
         event.clientY,
-        factor
+        event.deltaY < 0
+            ? 1.10
+            : 0.90
     );
 }
 
 
 /* =========================================================
-   WIN STATE
+   WIN
 ========================================================= */
 
 function showWinOverlay() {
@@ -2207,6 +2472,7 @@ function showWinOverlay() {
 
 
     let stars = 1;
+
 
     if (lives === 3) {
         stars = 3;
@@ -2217,20 +2483,17 @@ function showWinOverlay() {
 
     starRating.textContent =
         "★".repeat(stars) +
-        "☆".repeat(3 - stars);
-
-
-    starRating.setAttribute(
-        "aria-label",
-        `${stars} out of 3 stars`
-    );
+        "☆".repeat(
+            3 - stars
+        );
 
 
     winDetails.textContent =
         `Level ${currentLevel} cleared with ${lives} ${lives === 1 ? "life" : "lives"} remaining.`;
 
 
-    winOverlay.hidden = false;
+    winOverlay.hidden =
+        false;
 }
 
 
@@ -2241,8 +2504,6 @@ function showWinOverlay() {
 function showGameOverOverlay() {
 
     gameLocked = true;
-
-    updateHeartsUI();
 
     gameOverOverlay.hidden =
         false;
@@ -2264,20 +2525,10 @@ function hideOverlays() {
 
 
 /* =========================================================
-   BACK / MENU
+   BACK
 ========================================================= */
 
 function goBack() {
-
-    /*
-        First try browser history.
-
-        If this game is opened directly with no useful history,
-        fall back to ../index.html.
-
-        This also makes it suitable for later placement inside
-        a GameHub/games/ folder.
-    */
 
     if (
         window.history.length > 1
@@ -2295,21 +2546,7 @@ function goBack() {
 
 
 /* =========================================================
-   NEXT LEVEL
-========================================================= */
-
-function goNextLevel() {
-
-    hideOverlays();
-
-    loadLevel(
-        currentLevel + 1
-    );
-}
-
-
-/* =========================================================
-   EVENT LISTENERS
+   EVENTS
 ========================================================= */
 
 hintButton.addEventListener(
@@ -2344,7 +2581,10 @@ gridToggle.addEventListener(
 
 nextLevelButton.addEventListener(
     "click",
-    goNextLevel
+    () =>
+        loadLevel(
+            currentLevel + 1
+        )
 );
 
 
@@ -2367,7 +2607,7 @@ newPuzzleButton.addEventListener(
 
 
 /* =========================================================
-   BOARD POINTER EVENTS
+   BOARD EVENTS
 ========================================================= */
 
 boardSvg.addEventListener(
@@ -2399,20 +2639,15 @@ boardSvg.addEventListener(
 );
 
 
-/* =========================================================
-   PREVENT CONTEXT MENU ON THE BOARD
-========================================================= */
-
 boardSvg.addEventListener(
     "contextmenu",
-    event => {
-        event.preventDefault();
-    }
+    event =>
+        event.preventDefault()
 );
 
 
 /* =========================================================
-   START GAME
+   START
 ========================================================= */
 
 loadLevel(1);
