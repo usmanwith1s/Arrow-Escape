@@ -93,6 +93,16 @@ function createArrows(levelData) {
             "Arrow " + (index + 1)
         );
 
+        // Build the arrow visually
+        const shaft = document.createElement("span");
+        shaft.className = "arrow-shaft";
+
+        const head = document.createElement("span");
+        head.className = "arrow-head";
+
+        arrow.appendChild(shaft);
+        arrow.appendChild(head);
+
         arrow.addEventListener("click", function () {
             moveArrow(index);
         });
