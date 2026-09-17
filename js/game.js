@@ -8,51 +8,65 @@ let level = 1;
 let lives = 3;
 let arrows = [];
 
+const GRID_SIZE = 7;
+
 
 /* =========================
-   LEVEL DATA
+   LEVELS
 ========================= */
 
 const levels = [
     [
         { row: 0, col: 0, direction: "right" },
-        { row: 0, col: 1, direction: "down" },
-        { row: 1, col: 1, direction: "left" }
+        { row: 0, col: 2, direction: "down" },
+        { row: 2, col: 2, direction: "left" },
+        { row: 2, col: 0, direction: "down" },
+        { row: 4, col: 0, direction: "right" },
+        { row: 4, col: 3, direction: "up" }
     ],
 
     [
-        { row: 0, col: 0, direction: "down" },
-        { row: 1, col: 0, direction: "right" },
-        { row: 1, col: 1, direction: "down" },
-        { row: 2, col: 1, direction: "right" }
+        { row: 0, col: 1, direction: "down" },
+        { row: 2, col: 1, direction: "right" },
+        { row: 2, col: 4, direction: "up" },
+        { row: 1, col: 4, direction: "left" },
+        { row: 1, col: 2, direction: "down" },
+        { row: 4, col: 2, direction: "right" },
+        { row: 4, col: 5, direction: "up" },
+        { row: 3, col: 5, direction: "left" }
     ],
 
     [
         { row: 0, col: 0, direction: "right" },
-        { row: 0, col: 1, direction: "down" },
-        { row: 1, col: 1, direction: "left" },
-        { row: 1, col: 0, direction: "down" },
-        { row: 2, col: 0, direction: "right" }
+        { row: 0, col: 3, direction: "down" },
+        { row: 2, col: 3, direction: "left" },
+        { row: 2, col: 1, direction: "down" },
+        { row: 4, col: 1, direction: "right" },
+        { row: 4, col: 5, direction: "up" },
+        { row: 1, col: 5, direction: "left" },
+        { row: 1, col: 2, direction: "down" },
+        { row: 5, col: 2, direction: "right" },
+        { row: 5, col: 6, direction: "up" }
     ]
 ];
 
 
 /* =========================
-   START GAME
+   START LEVEL
 ========================= */
 
 function startLevel() {
 
     board.innerHTML = "";
     arrows = [];
-
     lives = 3;
 
     updateStats();
 
     message.textContent = "Clear all the arrows!";
 
-    const levelData = levels[(level - 1) % levels.length];
+    const levelData =
+        levels[(level - 1) % levels.length];
 
     createArrows(levelData);
 }
@@ -68,18 +82,19 @@ function createArrows(levelData) {
 
         const arrow = document.createElement("button");
 
-        arrow.classList.add("arrow");
-
-        arrow.textContent = getArrowSymbol(data.direction);
+        arrow.className = "arrow";
 
         arrow.dataset.row = data.row;
         arrow.dataset.col = data.col;
         arrow.dataset.direction = data.direction;
 
-        arrow.addEventListener("click", () => {
+        arrow.setAttribute(
+            "aria-label",
+            "Arrow " + (index + 1)
+        );
 
+        arrow.addEventListener("click", function () {
             moveArrow(index);
-
         });
 
         board.appendChild(arrow);
@@ -89,33 +104,12 @@ function createArrows(levelData) {
             row: data.row,
             col: data.col,
             direction: data.direction,
-            escaped: false
+            escaped: false,
+            moving: false
         });
     });
 
     positionArrows();
-}
-
-
-/* =========================
-   ARROW SYMBOL
-========================= */
-
-function getArrowSymbol(direction) {
-
-    if (direction === "up") {
-        return "↑";
-    }
-
-    if (direction === "down") {
-        return "↓";
-    }
-
-    if (direction === "left") {
-        return "←";
-    }
-
-    return "→";
 }
 
 
@@ -125,42 +119,21 @@ function getArrowSymbol(direction) {
 
 function positionArrows() {
 
-    const gridSize = getGridSize();
-
     arrows.forEach(arrow => {
 
         if (arrow.escaped) {
             return;
         }
 
-        const x = ((arrow.col + 0.5) / gridSize) * 100;
-        const y = ((arrow.row + 0.5) / gridSize) * 100;
+        const x =
+            ((arrow.col + 0.5) / GRID_SIZE) * 100;
+
+        const y =
+            ((arrow.row + 0.5) / GRID_SIZE) * 100;
 
         arrow.element.style.left = x + "%";
         arrow.element.style.top = y + "%";
     });
-}
-
-
-/* =========================
-   GRID SIZE
-========================= */
-
-function getGridSize() {
-
-    let max = 0;
-
-    arrows.forEach(arrow => {
-
-        max = Math.max(
-            max,
-            arrow.row,
-            arrow.col
-        );
-
-    });
-
-    return Math.max(max + 1, 5);
 }
 
 
@@ -172,21 +145,17 @@ function moveArrow(index) {
 
     const arrow = arrows[index];
 
-    if (!arrow || arrow.escaped) {
+    if (!arrow || arrow.escaped || arrow.moving) {
         return;
     }
 
-    const blocked = isBlocked(arrow);
+    arrow.moving = true;
 
-    if (blocked) {
+    const blocker = findBlocker(arrow);
 
-        loseLife();
+    if (blocker) {
 
-        arrow.element.classList.add("blocked");
-
-        setTimeout(() => {
-            arrow.element.classList.remove("blocked");
-        }, 250);
+        clash(arrow);
 
         return;
     }
@@ -196,63 +165,170 @@ function moveArrow(index) {
 
 
 /* =========================
-   CHECK BLOCK
+   FIND BLOCKER
 ========================= */
 
-function isBlocked(arrow) {
+function findBlocker(arrow) {
 
-    for (let i = 0; i < arrows.length; i++) {
+    let blocker = null;
 
-        const other = arrows[i];
-
-        if (other === arrow || other.escaped) {
-            continue;
-        }
+    arrows.forEach(other => {
 
         if (
-            arrow.direction === "right" &&
-            other.row === arrow.row &&
-            other.col > arrow.col
+            other === arrow ||
+            other.escaped
         ) {
-            return true;
+            return;
         }
 
-        if (
-            arrow.direction === "left" &&
-            other.row === arrow.row &&
-            other.col < arrow.col
-        ) {
-            return true;
+        if (arrow.direction === "right") {
+
+            if (
+                other.row === arrow.row &&
+                other.col > arrow.col
+            ) {
+
+                if (
+                    blocker === null ||
+                    other.col < blocker.col
+                ) {
+                    blocker = other;
+                }
+            }
         }
 
-        if (
-            arrow.direction === "down" &&
-            other.col === arrow.col &&
-            other.row > arrow.row
-        ) {
-            return true;
+
+        if (arrow.direction === "left") {
+
+            if (
+                other.row === arrow.row &&
+                other.col < arrow.col
+            ) {
+
+                if (
+                    blocker === null ||
+                    other.col > blocker.col
+                ) {
+                    blocker = other;
+                }
+            }
         }
 
-        if (
-            arrow.direction === "up" &&
-            other.col === arrow.col &&
-            other.row < arrow.row
-        ) {
-            return true;
-        }
-    }
 
-    return false;
+        if (arrow.direction === "down") {
+
+            if (
+                other.col === arrow.col &&
+                other.row > arrow.row
+            ) {
+
+                if (
+                    blocker === null ||
+                    other.row < blocker.row
+                ) {
+                    blocker = other;
+                }
+            }
+        }
+
+
+        if (arrow.direction === "up") {
+
+            if (
+                other.col === arrow.col &&
+                other.row < arrow.row
+            ) {
+
+                if (
+                    blocker === null ||
+                    other.row > blocker.row
+                ) {
+                    blocker = other;
+                }
+            }
+        }
+    });
+
+    return blocker;
 }
 
 
 /* =========================
-   ESCAPE ARROW
+   CLASH
+========================= */
+
+function clash(arrow) {
+
+    arrow.element.classList.add("blocked");
+
+    lives--;
+
+    updateStats();
+
+    message.textContent =
+        "CLASH! Find another path.";
+
+    setTimeout(() => {
+
+        arrow.element.classList.remove("blocked");
+
+        arrow.moving = false;
+
+    }, 500);
+
+
+    if (lives <= 0) {
+
+        message.textContent =
+            "Out of lives! Restarting...";
+
+        setTimeout(() => {
+
+            startLevel();
+
+        }, 900);
+    }
+}
+
+
+/* =========================
+   ESCAPE
 ========================= */
 
 function escapeArrow(arrow) {
 
+    const distance = 120;
+
+    let x = 0;
+    let y = 0;
+
+    if (arrow.direction === "right") {
+        x = distance;
+    }
+
+    if (arrow.direction === "left") {
+        x = -distance;
+    }
+
+    if (arrow.direction === "down") {
+        y = distance;
+    }
+
+    if (arrow.direction === "up") {
+        y = -distance;
+    }
+
     arrow.escaped = true;
+
+    arrow.element.style.setProperty(
+        "--escape-x",
+        `calc(-50% + ${x}vw)`
+    );
+
+    arrow.element.style.setProperty(
+        "--escape-y",
+        `calc(-50% + ${y}vh)`
+    );
 
     arrow.element.classList.add("escaping");
 
@@ -262,36 +338,7 @@ function escapeArrow(arrow) {
 
         checkLevelComplete();
 
-    }, 350);
-}
-
-
-/* =========================
-   LOSE LIFE
-========================= */
-
-function loseLife() {
-
-    lives--;
-
-    updateStats();
-
-    if (lives <= 0) {
-
-        message.textContent = "Game over!";
-
-        setTimeout(() => {
-
-            startLevel();
-
-        }, 900);
-
-    } else {
-
-        message.textContent =
-            "Blocked! Find another arrow.";
-
-    }
+    }, 550);
 }
 
 
@@ -301,20 +348,19 @@ function loseLife() {
 
 function checkLevelComplete() {
 
-    const remaining = arrows.filter(
-        arrow => !arrow.escaped
-    );
+    const remaining =
+        arrows.filter(
+            arrow => !arrow.escaped
+        );
 
     if (remaining.length === 0) {
 
         message.textContent =
-            "Level complete! 🎉";
+            "LEVEL COMPLETE! 🎉";
 
         setTimeout(() => {
 
             level++;
-
-            levelDisplay.textContent = level;
 
             startLevel();
 
@@ -332,7 +378,7 @@ function updateStats() {
     levelDisplay.textContent = level;
 
     livesDisplay.textContent =
-        "❤️".repeat(lives);
+        "❤️".repeat(Math.max(lives, 0));
 }
 
 
@@ -340,11 +386,10 @@ function updateStats() {
    RESTART
 ========================= */
 
-restartButton.addEventListener("click", () => {
-
-    startLevel();
-
-});
+restartButton.addEventListener(
+    "click",
+    startLevel
+);
 
 
 /* =========================
